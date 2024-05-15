@@ -1,6 +1,7 @@
 import pygame
 
 from settings import *
+from timer import Timer
 
 class Player(pygame.sprite.Sprite):
     def __init__(self,pos,groups,collision_sprites):
@@ -12,23 +13,25 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_frect(topleft = pos)
         self.old_rect = self.rect.copy()
 
+        #Kontaktindikatoren
+        self.floor = False
+        self.wall = False
+
         #Movement
         self.gravity = GRAVITY
         self.direction = vector(0,0)
         self.speed = SPEED
         self.jump = False
-        self.double_jump = False
-        self.dive = False
-
-        self.dive_distance = DIVE_DISTANCE
         self.jump_height = JUMP_HEIGHT
-        self.double_jump_height = DOUBLE_JUMP_HEIGHT
+        self.walljump_height = WALLJUMP_HEIGHT
+
 
         # Kollision
         self.collision_sprites = collision_sprites
         self.on_surface = {"floor":False,"left":False,"right":False}
 
-        self.display_surface = pygame.display.get_surface()
+        #Timer
+        self.timers = {"wall jump":Timer(200)}
     def input(self):
         keys = pygame.key.get_pressed()
         input_vector = vector(0,0)
@@ -38,48 +41,60 @@ class Player(pygame.sprite.Sprite):
             input_vector.x+=1
         self.direction.x = input_vector.normalize().x if input_vector else input_vector.x
 
-        if keys[pygame.K_SPACE]:
+        if keys[pygame.K_SPACE] or keys[pygame.K_UP]:
             self.jump = True
-        if keys[pygame.K_SPACE] and self.jump:
-            self.double_jump = True
-        if keys[pygame.K_SPACE] and self.double_jump:
-            self.dive = True
+            self.timers["wall jump"].activate()
 
     def move(self,dt):
         #Horizontal
         self.rect.x += self.direction.x * self.speed * dt
         self.collision("horizontal")
 
-        #Vertikal
-        self.direction.y += self.gravity /2 * dt
-        self.rect.y += self.direction.y * dt
-        self.direction.y += self.gravity /2 * dt
-        self.collision("vertical")
+        #Wallslide
+        if self.floor == False and self.wall == True:
+            self.direction.y = 0
+            self.rect.y += self.gravity/10 * dt
+        else:
+        #Normale Gravitation
+            self.direction.y += self.gravity /2 * dt
+            self.rect.y += self.direction.y * dt
+            self.direction.y += self.gravity /2 * dt
+            self.collision("vertical")
 
-        #EinfacherSprung
+
         if self.jump:
-            if self.on_surface["floor"]:
+            #EinfacherSprung
+            if self.floor:
                 self.direction.y = -self.jump_height
             self.jump = False
-        if self.double_jump == True:
-            self.direction.y = -self.jump_height
-            self.double_jump = False
-        if self.dive:
-            self.direction.x = +self.dive_distance
-            self.dive = False
+            if self.wall:
+                self.direction.y = -self.walljump_height
+            self.jump = False
+
 
 
     def check_contact(self):
         floor_rect = pygame.Rect(self.rect.bottomleft,(self.rect.width,2))
         right_rect = pygame.Rect(self.rect.topright+ vector(0,self.rect.height/4),(2,self.rect.height/2))
-        left_rect = pygame.Rect(self.rect.topright+ vector(0,self.rect.height/4),(-2,self.rect.height/2))
-
-        pygame.draw.rect(self.display_surface,"yellow",floor_rect)
-
+        left_rect = pygame.Rect(self.rect.topleft+ vector(-2,self.rect.height/4),(2,self.rect.height/2))
+        # surfaces = [floor_rect,right_rect,left_rect]
+        # for surface in surfaces:
+        #     pygame.draw.rect(self.display_surface,"yellow",surface)
         collide_rects = [sprite.rect for sprite in self.collision_sprites]
 
         #Kollisionen
-        self.on_surface["floor"] = True if floor_rect.collidelist(collide_rects) >= 0 else False
+
+        self.on_surface["floor"]= True if floor_rect.collidelist(collide_rects) >= 0 else False
+        self.on_surface["left"] = True if left_rect.collidelist(collide_rects) >= 0 else False
+        self.on_surface["right"] = True if right_rect.collidelist(collide_rects) >= 0 else False
+        if self.on_surface["left"] or self.on_surface["right"]:
+            self.wall =True
+        else:
+            self.wall = False
+        if self.on_surface["floor"]:
+            self.floor = True
+        else:
+            self.floor = False
     def collision(self,axis):
         for sprite in self.collision_sprites:
             if sprite.rect.colliderect(self.rect):
@@ -96,13 +111,24 @@ class Player(pygame.sprite.Sprite):
                     # Top Kollision
                     if self.rect.top <= sprite.rect.bottom and self.old_rect.top >= sprite.old_rect.bottom:
                         self.rect.top = sprite.rect.bottom
+                        #"Abnullen" der Gravitation nach Kollision
+                        self.direction.y = 0
                     # Bottom Kollision
                     if self.rect.bottom >= sprite.rect.top and self.old_rect.bottom <= sprite.old_rect.top:
                         self.rect.bottom = sprite.rect.top
                         #"Abnullen" der Gravitation nach Kollision
                         self.direction.y = 0
+
+    def update_timers(self):
+        for timer in self.timers.values():
+            timer.update()
     def update(self,dt):
         self.old_rect = self.rect.copy()
+        self.update_timers()
         self.input()
         self.move(dt)
         self.check_contact()
+        print(self.on_surface)
+        print(f"floor {self.floor}")
+        print(f"wall {self.wall}")
+        print(self.timers["wall jump"].active)
