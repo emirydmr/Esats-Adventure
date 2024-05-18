@@ -1,16 +1,18 @@
 import pygame
-
+from os.path import join
 from settings import *
 from timer import Timer
 
 class Player(pygame.sprite.Sprite):
     def __init__(self,pos,groups,collision_sprites):
         super().__init__(groups)
-        self.image = pygame.Surface((48,56))
-        self.image.fill((255,0,0))
+        self.image = pygame.Surface((64,64))
+        #self.image = pygame.image.load(join("..","assets","Esat","sprites","idle","tile000.png"))
+        self.image.fill((255, 0, 0))
 
         #rects
         self.rect = self.image.get_frect(topleft = pos)
+        self.hitbox_rect = self.rect.inflate(-78,-26)
         self.old_rect = self.rect.copy()
 
         #Kontaktindikatoren
@@ -18,40 +20,52 @@ class Player(pygame.sprite.Sprite):
         self.wall = False
 
         #Movement
+        self.acceleration = ACCELERATION
         self.gravity = GRAVITY
         self.direction = vector(0,0)
         self.speed = SPEED
         self.jump = False
         self.jump_height = JUMP_HEIGHT
         self.walljump_height = WALLJUMP_HEIGHT
+        #self.idle = True if
 
 
         # Kollision
         self.collision_sprites = collision_sprites
         self.on_surface = {"floor":False,"left":False,"right":False}
 
-        #Timer
-        self.timers = {"wall jump":Timer(200)}
+        #Timers
+        self.timers = {
+            "wall slide block": Timer(200), #Wallslides sollen erst nach einer gewissen Zeit möglich sein
+            "pre wall jump block": Timer(300),  # Bewirkt, dass Walljumps erst gemacht werden dürfen, wenn der Spieler eine gewisse Dauer bereits geslidet ist
+            "post wall jump input block":Timer(300),#Blockiert L/R Input wenn Player einen Walljump gemacht hat
+
+        }
     def input(self):
         keys = pygame.key.get_pressed()
         input_vector = vector(0,0)
-        if keys[pygame.K_LEFT]:
-            input_vector.x-=1
-        if keys[pygame.K_RIGHT]:
-            input_vector.x+=1
-        self.direction.x = input_vector.normalize().x if input_vector else input_vector.x
+
+        if self.timers["post wall jump input block"].active == False:
+            #Blockiert linksseitigen Input wenn der Walljump-Timer aktiv ist, und der Player linksseitigen Kontakt hat
+            if keys[pygame.K_LEFT] and not self.on_surface["left"]:
+                input_vector.x-=1
+            #Blockiert linksseitigen Input wenn der Walljump-Timer aktiv ist, und der Player rechtssseitigen Kontakt hat
+            if keys[pygame.K_RIGHT] and not self.on_surface["right"]:
+                input_vector.x+=1
+            self.direction.x = input_vector.normalize().x if input_vector else input_vector.x
 
         if keys[pygame.K_SPACE] or keys[pygame.K_UP]:
             self.jump = True
-            self.timers["wall jump"].activate()
 
     def move(self,dt):
         #Horizontal
         self.rect.x += self.direction.x * self.speed * dt
+        #self.direction.x += self.acceleration * dt
+        #self.rect.x = self.direction.x * self.speed * dt * self.acceleration
         self.collision("horizontal")
 
         #Wallslide
-        if self.floor == False and self.wall == True:
+        if ((self.floor == False) and (self.wall == True)) and self.timers["wall slide block"].active == False:
             self.direction.y = 0
             self.rect.y += self.gravity/10 * dt
         else:
@@ -61,13 +75,19 @@ class Player(pygame.sprite.Sprite):
             self.direction.y += self.gravity /2 * dt
             self.collision("vertical")
 
+        if self.floor:
+            self.timers["pre wall jump block"].activate()
+
 
         if self.jump:
             #EinfacherSprung
             if self.floor:
                 self.direction.y = -self.jump_height
-            self.jump = False
-            if self.wall:
+                self.timers["wall slide block"].activate()
+            elif self.wall and self.timers["pre wall jump block"].active == False:
+                #Blockiert Input wenn Walljump aktiv, siehe input()
+                self.timers["post wall jump input block"].activate()
+                self.direction.x = 1 if self.on_surface["left"] else -1
                 self.direction.y = -self.walljump_height
             self.jump = False
 
@@ -124,11 +144,9 @@ class Player(pygame.sprite.Sprite):
             timer.update()
     def update(self,dt):
         self.old_rect = self.rect.copy()
+        self.check_contact()
         self.update_timers()
         self.input()
         self.move(dt)
-        self.check_contact()
-        print(self.on_surface)
-        print(f"floor {self.floor}")
-        print(f"wall {self.wall}")
-        print(self.timers["wall jump"].active)
+        print(f"direction {self.direction}")
+        print(f"velocity {self.on_surface}")

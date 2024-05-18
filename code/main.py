@@ -2,6 +2,7 @@ from settings import *
 from level import Level
 from pytmx.util_pygame import load_pygame
 from os.path import join
+from support import *
 class Game:
     def __init__(self):
         pygame.init()
@@ -10,9 +11,11 @@ class Game:
         pygame.display.set_caption("testest")
         map_path = join("..","data","levels","omni.tmx")
         self.tmx_map = {0: load_pygame(map_path)}
+        self.assets()
 
-        self.current_stage = Level(self.tmx_map[0])
-
+        self.current_stage = Level(self.tmx_map[0],self.level_frames)
+    def assets(self):
+        self.level_frames = {"player": import_sub_folders}
     def run(self):
         while True:
             dt = self.clock.tick(TICKSPEED) / 1000
