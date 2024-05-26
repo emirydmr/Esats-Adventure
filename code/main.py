@@ -13,9 +13,9 @@ class Game:
         self.tmx_map = {0: load_pygame(map_path)}
         self.assets()
 
-        self.current_stage = Level(self.tmx_map[0],self.level_frames)
+        self.current_stage = Level(self.tmx_map[0],self.esat_frames)
     def assets(self):
-        self.level_frames = {"player": import_sub_folders}
+        self.esat_frames = {"player": import_sub_folders("..","assets","Esat","sprites")}
     def run(self):
         while True:
             dt = self.clock.tick(TICKSPEED) / 1000
@@ -25,6 +25,9 @@ class Game:
                     sys.exit()
             self.current_stage.run(dt)
             pygame.display.update()
+
+
 if __name__ == '__main__':
     game_instance = Game()
     game_instance.run()
+    print(self.esat_frames)

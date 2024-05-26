@@ -1,15 +1,21 @@
+import os
+
 import pygame
 from os.path import join
 from settings import *
 from timer import Timer
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self,pos,groups,collision_sprites):
+    def __init__(self,pos,groups,collision_sprites,frames):
         super().__init__(groups)
-        self.image = pygame.Surface((64,64))
-        #self.image = pygame.image.load(join("..","assets","Esat","sprites","idle","tile000.png"))
-        self.image.fill((255, 0, 0))
+        self.frames, self.frame_number= frames,0
+        self.state,self.right_faced = "idle",True
+        self.image = self.frames["player"][self.state][self.frame_number]
 
+        #animation
+        self.possible_states = os.listdir(join("..","assets","Esat","sprites"))
+
+        print(self.possible_states)
         #rects
         self.rect = self.image.get_frect(topleft = pos)
         self.hitbox_rect = self.rect.inflate(-78,-26)
@@ -20,6 +26,7 @@ class Player(pygame.sprite.Sprite):
         self.wall = False
 
         #Movement
+        self.state = "idle"
         self.acceleration = ACCELERATION
         self.gravity = GRAVITY
         self.direction = vector(0,0)
@@ -49,14 +56,18 @@ class Player(pygame.sprite.Sprite):
             #Blockiert linksseitigen Input wenn der Walljump-Timer aktiv ist, und der Player linksseitigen Kontakt hat
             if keys[pygame.K_LEFT] and not self.on_surface["left"]:
                 input_vector.x-=1
+                self.right_faced = False
             #Blockiert linksseitigen Input wenn der Walljump-Timer aktiv ist, und der Player rechtssseitigen Kontakt hat
             if keys[pygame.K_RIGHT] and not self.on_surface["right"]:
                 input_vector.x+=1
+                self.right_faced = True
             self.direction.x = input_vector.normalize().x if input_vector else input_vector.x
 
         if keys[pygame.K_SPACE] or keys[pygame.K_UP]:
             self.jump = True
-
+    def update_state(self):
+        if self.on_surface["floor"]:
+            self.state = "idle" if self.direction.x == 0 else "walk"
     def move(self,dt):
         #Horizontal
         self.rect.x += self.direction.x * self.speed * dt
@@ -142,11 +153,17 @@ class Player(pygame.sprite.Sprite):
     def update_timers(self):
         for timer in self.timers.values():
             timer.update()
+
+    def animate(self,dt):
+        self.frame_number += ANIMATION_SPEED *dt
+        self.image = self.frames["player"][self.state][int(self.frame_number % len(self.frames["player"][self.state]))]
+        self.image = self.image if self.right_faced else pygame.transform.flip(self.image,True,False)
     def update(self,dt):
         self.old_rect = self.rect.copy()
-        self.check_contact()
-        self.update_timers()
         self.input()
         self.move(dt)
-        print(f"direction {self.direction}")
-        print(f"velocity {self.on_surface}")
+        self.update_state()
+        self.animate(dt)
+        self.update_timers()
+        self.check_contact()
+
